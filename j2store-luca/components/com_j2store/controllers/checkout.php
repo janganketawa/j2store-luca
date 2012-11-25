@@ -489,11 +489,43 @@ class J2StoreControllerCheckout extends JController
 
 	function getShippingRates()
 	{
+		
+		
+		$db		= JFactory::getDbo();
+		$query	= $db->getQuery(true);
+		$user = &JFactory::getUser();
+				$order =& $this->_order;
+		
+				
+		$orderItems = $order->getItems(); 
+		//print_r($orderItems ); exit;
+		foreach ($orderItems as $item) {
+		//print_r($item );
+		$query	= $db->getQuery(true);	
+		$query->select('*');
+		$query->from('#__j2store_prices AS p');
+		$query->where('p.article_id = '.$item->product_id);
+		$query->join('LEFT', '`#__j2store_shippingmethods` AS sm ON sm.id = p.item_shipping');
+		$query->join('LEFT', '`#__j2store_shippingrates` AS sr ON sr.shipping_method_id = sm.id');
+		$query->where("(sm.shipping_method_type=0) OR".
+					"(sm.shipping_method_type=1 AND sr.shipping_rate_weight_start <= '".$item->orderitem_quantity."' 
+        		AND ( sr.shipping_rate_weight_end >= '".$item->orderitem_quantity."'
+                    OR sr.shipping_rate_weight_end = 0.000 )) OR".
+					"(sm.shipping_method_type=2 AND sr.shipping_rate_weight_start <= '".$item->orderitem_final_price."' 
+        		AND ( sr.shipping_rate_weight_end >= '".$item->orderitem_final_price."'
+                    OR sr.shipping_rate_weight_end = 0.000 )) ");
+		$db->setQuery($query);
+		$qitems = $db->loadObjectList();
+		print_r($qitems );
+
+		echo'<hr/>';
+		}
+		 exit;
+		
 
 		require_once(JPATH_ADMINISTRATOR.DS.'components'.DS.'com_j2store'.DS.'library'.DS.'shipping.php');
 		$shipping_helper = new J2StoreShipping;
 
-		$order =& $this->_order;
 
 		$rates = array();
 		JModel::addIncludePath(JPATH_ADMINISTRATOR.DS.'components'.DS.'com_j2store'.DS.'models');
