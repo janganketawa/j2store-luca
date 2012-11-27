@@ -1,6 +1,6 @@
 <?php
 /*------------------------------------------------------------------------
-# com_j2store - J2 Store v 1.0
+ # com_j2store - J2 Store v 1.0
 # ------------------------------------------------------------------------
 # author    Sasi varna kumar - Weblogicx India http://www.weblogicxindia.com
 # copyright Copyright (C) 2012 Weblogicxindia.com. All Rights Reserved.
@@ -11,26 +11,88 @@
 
 
 class J2StoreShipping {
-	
+
+	public function getItemShipping( $item ) {
+
+		$rate_exists = false;
+		$db    = JFactory::getDbo();
+		$query  = $db->getQuery(true);
+
+		$return = new JObject();
+		$return->shipping_rate_id         = '0';
+		$return->shipping_rate_price      = '0.00000';
+		$return->shipping_rate_handling   = '0.00000';
+			
+		$query->select('p.article_id,p.item_shipping,sm.*');
+		$query->from('#__j2store_prices AS p');
+		$query->where('p.article_id='.$item->product_id);
+		$query->join('LEFT', '`#__j2store_shippingmethods` AS sm ON sm.id=p.item_shipping');
+		$db->setQuery($query);
+		$result = $db->loadObjectList();
+
+		if(isset($result)){
+			$method=$result[0];
+			//print_r($method);
+			$query2  = $db->getQuery(true);
+			$query2->select('*');
+			$query2->from('#__j2store_shippingrates AS r');
+			$query2->where('r.shipping_method_id='.$method->id);
+			// based on the shipping method set the filter weight for either Quantity(type=1) or Price based(type=2)
+			switch($method->shipping_method_type){
+				case 1: // Quantity based
+					$filter_weight = $item->orderitem_quantity;
+					break;
+				case 2:  // Price based
+					$filter_weight = $item->orderitem_final_price;
+					break;
+				default:
+					$filter_weight='';break;
+			}
+			if (strlen($filter_weight))
+			{
+				//echo'ss';exit;
+				$query2->where("(	r.shipping_rate_weight_start <= '".$filter_weight."'
+						AND (	r.shipping_rate_weight_end >= '".$filter_weight."'
+						OR r.shipping_rate_weight_end = '0.000' )
+				)");
+			}
+
+			$db->setQuery($query2);
+			$rates = $db->loadObjectList();
+		}
+
+		if(isset($rates)){
+			$rate=$rates[0];
+			//print_r($rates);
+
+			$return->shipping_method_id      = $rate->shipping_method_id;
+			$return->shipping_rate_price      = $rate->shipping_rate_price;
+			$return->shipping_rate_handling   = $rate->shipping_rate_handling;
+		}
+
+		return $return;
+	}
+
+
 	public function getTotal( $shipping_method_id, $orderItems )
 	{
-		
-		$doc = &JFactory::getDocument();		
-		
-        $return = new JObject();
-        $return->shipping_rate_id         = '0';
-        $return->shipping_rate_price      = '0.00000';
-        $return->shipping_rate_handling   = '0.00000';
-        
-        $rate_exists = false;
-        // cast product_id as an array
-        $orderItems = (array) $orderItems;
-		
+
+		$doc = &JFactory::getDocument();
+
+		$return = new JObject();
+		$return->shipping_rate_id         = '0';
+		$return->shipping_rate_price      = '0.00000';
+		$return->shipping_rate_handling   = '0.00000';
+
+		$rate_exists = false;
+		// cast product_id as an array
+		$orderItems = (array) $orderItems;
+
 		// determine the shipping method type
 		JTable::addIncludePath(JPATH_ADMINISTRATOR.DS.'components'.DS.'com_j2store'.DS.'tables');
 		$shippingmethod = JTable::getInstance( 'ShippingMethods', 'Table' );
 		$shippingmethod->load( $shipping_method_id );
-	
+
 		if (empty($shippingmethod->id))
 		{
 			// TODO if this is an object, setError, otherwise return false, or 0.000?
@@ -41,39 +103,39 @@ class J2StoreShipping {
 		switch($shippingmethod->shipping_method_type)
 		{
 			case "2":
-		        // 5 = per order - price based
-		        // Get the total of the order, and find the rate for that
-		        $total = 0;
+				// 5 = per order - price based
+				// Get the total of the order, and find the rate for that
+				$total = 0;
 				foreach ($orderItems as $item)
-                {
-                	$total += $item->orderitem_final_price;
-                }		  
-		 	           JModel::addIncludePath( JPATH_ADMINISTRATOR.DS.'components'.DS.'com_j2store'.DS.'models' );
-				       $model = JModel::getInstance('ShippingRates', 'J2StoreModel');
-				       $model->setState('filter_shippingmethod', $shipping_method_id);
-				       $model->setState('filter_weight', $total); // Use weight as total
-				        
-				       $items = $model->getList();
-	       
-				        if (empty($items))
-				        {
-				            return JTable::getInstance('ShippingRates', 'Table');           
-				        }
-				        
-				        $rate = $items[0];
-				        
-				        // if $rate->shipping_rate_id is empty, then no real rate was found 
-                        if (!empty($rate->shipping_rate_id))
-                        {
-                            $rate_exists = true;
-                        }
-                  		         
-		    	break;  
-		    case "1":
-		        // 1 = per order - quantity based
-		        // first, get the total quantity of shippable items for the entire order
-		        // then, figure out the rate for this number of items (use the weight range field) + geozone
-		    case "0":
+				{
+					$total += $item->orderitem_final_price;
+				}
+				JModel::addIncludePath( JPATH_ADMINISTRATOR.DS.'components'.DS.'com_j2store'.DS.'models' );
+				$model = JModel::getInstance('ShippingRates', 'J2StoreModel');
+				$model->setState('filter_shippingmethod', $shipping_method_id);
+				$model->setState('filter_weight', $total); // Use weight as total
+
+				$items = $model->getList();
+
+				if (empty($items))
+				{
+					return JTable::getInstance('ShippingRates', 'Table');
+				}
+
+				$rate = $items[0];
+
+				// if $rate->shipping_rate_id is empty, then no real rate was found
+				if (!empty($rate->shipping_rate_id))
+				{
+					$rate_exists = true;
+				}
+				 
+				break;
+			case "1":
+				// 1 = per order - quantity based
+				// first, get the total quantity of shippable items for the entire order
+				// then, figure out the rate for this number of items (use the weight range field) + geozone
+			case "0":
 				// 0 = per order - flat rate
 				// if any of the products in the order require shipping
 				$count_shipped_items = 0;
@@ -81,146 +143,146 @@ class J2StoreShipping {
 				//JTable::addIncludePath( JPATH_ADMINISTRATOR.DS.'components'.DS.'com_k2'.DS.'tables');
 				foreach ($orderItems as $item)
 				{
-				    // find out if the order ships
-				    // and while looping through, sum the weight of all shippable products in the order
+					// find out if the order ships
+					// and while looping through, sum the weight of all shippable products in the order
 					$pid = $item->product_id;
 					require_once(JPATH_ADMINISTRATOR.DS.'components'.DS.'com_j2store'.DS.'library'.DS.'j2item.php');
 					$product_helper = new J2StoreItem;
 					$isShips = $product_helper->isShippingEnabled($pid);
-		            
-		            if (!empty($isShips))
-		            {
-		                $product_id = $item->product_id;
-		                $order_ships = true;
-		                $count_shipped_items += $item->orderitem_quantity;
-		            }
+
+					if (!empty($isShips))
+					{
+						$product_id = $item->product_id;
+						$order_ships = true;
+						$count_shipped_items += $item->orderitem_quantity;
+					}
 				}
-				
+
 				if ($order_ships)
 				{
-				        switch( $shippingmethod->shipping_method_type )
-                        {
-                            case "1":
-                                // quantity //based get the shipping rate for the entire order using the count of all products in the order that ship
-                                $rate = $this->getRate( $shipping_method_id, $product_id, '1', $count_shipped_items );
-                                break;
-                            
-                            default:
-                            case "0":
-                                // flat rate // don't use weight, just do flat rate for entire order
-                                // regardless of weight and regardless of the number of items
-                                $rate = $this->getRate( $shipping_method_id, $product_id );
-                                break;                                
-                            
-                        }
-                        
-                        // if $rate->shipping_rate_id is empty, then no real rate was found 
-                        if (!empty($rate->shipping_rate_id))
-                        {
-                            $rate_exists = true;
-                        }                        
-				    
+					switch( $shippingmethod->shipping_method_type )
+					{
+						case "1":
+							// quantity //based get the shipping rate for the entire order using the count of all products in the order that ship
+							$rate = $this->getRate( $shipping_method_id, $product_id, '1', $count_shipped_items );
+							break;
+
+						default:
+						case "0":
+							// flat rate // don't use weight, just do flat rate for entire order
+							// regardless of weight and regardless of the number of items
+							$rate = $this->getRate( $shipping_method_id, $product_id );
+							break;
+
+					}
+
+					// if $rate->shipping_rate_id is empty, then no real rate was found
+					if (!empty($rate->shipping_rate_id))
+					{
+						$rate_exists = true;
+					}
+
 				}
-                break;
-            default:
-	            $doc->setError( JText::_( "Invalid Shipping Method Type" ) );
-	            return false;
-                break;
+				break;
+			default:
+				$doc->setError( JText::_( "Invalid Shipping Method Type" ) );
+				return false;
+				break;
 		}
-		
+
 		if (!$rate_exists)
 		{
-            $doc->setError( JText::_( "No Rate Found" ) );
-            return false;
+			$doc->setError( JText::_( "No Rate Found" ) );
+			return false;
 		}
-		
+
 		$shipping_tax_rates = array();
-        $shipping_method_price = 0;
-        $shipping_method_handling = 0;
-        $shipping_method_tax_total = 0;
-  
+		$shipping_method_price = 0;
+		$shipping_method_handling = 0;
+		$shipping_method_tax_total = 0;
+
 		// now calc for the entire method
 		/*
 		foreach ($geozone_rates as $geozone_id=>$geozone_rate_array)
-		{		
-		    foreach ($geozone_rate_array as $geozone_rate)
-		    {
-                $shipping_method_price += ($geozone_rate->shipping_rate_price * $geozone_rate->qty);
-                $shipping_method_handling += $geozone_rate->shipping_rate_handling;
-                
-		    }
+		{
+		foreach ($geozone_rate_array as $geozone_rate)
+		{
+		$shipping_method_price += ($geozone_rate->shipping_rate_price * $geozone_rate->qty);
+		$shipping_method_handling += $geozone_rate->shipping_rate_handling;
+
 		}
-	*/	
-        // return formatted object
-       
-    //   print_r($rate);
+		}
+		*/
+		// return formatted object
+		 
+		//   print_r($rate);
 		$return->shipping_method_price    = $rate->shipping_rate_price;
 		$return->shipping_method_handling = $rate->shipping_rate_handling;
 		$return->shipping_method_total = $rate->shipping_rate_price + $rate->shipping_rate_handling;
-	    $return->shipping_method_id     = $shipping_method_id;
-        $return->shipping_method_name   = J2StoreShipping::getShippingName($shipping_method_id);
-        
+		$return->shipping_method_id     = $shipping_method_id;
+		$return->shipping_method_name   = J2StoreShipping::getShippingName($shipping_method_id);
+
 		return $return;
 	}
-	
-   public function getRate( $shipping_method_id, $product_id='', $use_weight='0', $weight='0' )
-    {
-        // TODO Give this better error reporting capabilities
-        JModel::addIncludePath( JPATH_ADMINISTRATOR.DS.'components'.DS.'com_j2store'.DS.'models' );
-        $model = JModel::getInstance('ShippingRates', 'J2StoreModel');
-        $model->setState('filter_shippingmethod', $shipping_method_id);        
-        
-        
-        JTable::addIncludePath( JPATH_ADMINISTRATOR.DS.'components'.DS.'com_j2store'.DS.'tables');
-        
-        require_once(JPATH_ADMINISTRATOR.DS.'components'.DS.'com_j2store'.DS.'library'.DS.'j2item.php');
+
+	public function getRate( $shipping_method_id, $product_id='', $use_weight='0', $weight='0' )
+	{
+		// TODO Give this better error reporting capabilities
+		JModel::addIncludePath( JPATH_ADMINISTRATOR.DS.'components'.DS.'com_j2store'.DS.'models' );
+		$model = JModel::getInstance('ShippingRates', 'J2StoreModel');
+		$model->setState('filter_shippingmethod', $shipping_method_id);
+
+
+		JTable::addIncludePath( JPATH_ADMINISTRATOR.DS.'components'.DS.'com_j2store'.DS.'tables');
+
+		require_once(JPATH_ADMINISTRATOR.DS.'components'.DS.'com_j2store'.DS.'library'.DS.'j2item.php');
 		$product_helper = new J2StoreItem;
 		$isShips = $product_helper->isShippingEnabled($product_id);
-        
-        if (empty($isShips))
-        {
-            // product doesn't require shipping, therefore cannot impact shipping costs
-            return JTable::getInstance('ShippingRates', 'Table');
-        }
-      
-        if (!empty($use_weight) && $use_weight == '1')
-        {
-            if(!empty($weight))
-            {
-                $model->setState('filter_weight', $weight);
-            }
-        }
-        $items = $model->getList();
-     
-        if (empty($items))
-        {
-            return JTable::getInstance('ShippingRates', 'Table');           
-        }
-        
-        return $items[0];
-    }
-    
-    function getShippingName($id) {
+
+		if (empty($isShips))
+		{
+			// product doesn't require shipping, therefore cannot impact shipping costs
+			return JTable::getInstance('ShippingRates', 'Table');
+		}
+
+		if (!empty($use_weight) && $use_weight == '1')
+		{
+			if(!empty($weight))
+			{
+				$model->setState('filter_weight', $weight);
+			}
+		}
+		$items = $model->getList();
+		 
+		if (empty($items))
+		{
+			return JTable::getInstance('ShippingRates', 'Table');
+		}
+
+		return $items[0];
+	}
+
+	function getShippingName($id) {
 		JTable::addIncludePath( JPATH_ADMINISTRATOR.DS.'components'.DS.'com_j2store'.DS.'tables');
 		$row = JTable::getInstance('ShippingMethods', 'Table');
 		$row->load($id);
-		
+
 		switch($row->shipping_method_type) {
-			
+				
 			case "2":
 				return JText::_('Price Based Per Order');
-			break;
-			
+				break;
+					
 			case "1":
 				return JText::_('Quantity Based Per Order');
-			break;
-			
+				break;
+					
 			case "0":
 			default:
 				return JText::_('Flat Rate Per Order');
-			break;
-			
-		}		
+				break;
+					
+		}
 	}
 
 }

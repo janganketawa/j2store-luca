@@ -24,6 +24,7 @@ $cart_edit_link = JRoute::_('index.php?option=com_j2store&view=mycart');
                 <tr>
                     <th style="text-align: left;"><?php echo JText::_( "J2STORE_CARTSUMMARY_PRODUCTS" ); ?></th>
                     <th style="width: 50px;"><?php echo JText::_( "J2STORE_CARTSUMMARY_QUANTITY" ); ?></th>
+                    <th style="width: 50px;"><?php echo JText::_( "J2STORE_CARTSUMMARY_SHIPPING_COST" ); ?></th>
                     <th style="width: 50px;"><?php echo JText::_( "J2STORE_CARTSUMMARY_TOTAL" ); ?></th>
                 </tr>
             </thead>
@@ -46,6 +47,11 @@ $cart_edit_link = JRoute::_('index.php?option=com_j2store&view=mycart');
                             <?php echo J2StorePrices::number($item->price); ?>                         
                   
                     </td>
+                    
+                    <td style="width: 50px; text-align: center;">
+                        <?php echo J2StorePrices::number($item->orderitem_shipping); ?>  
+                    </td>
+                    
                     <td style="width: 50px; text-align: center;">
                         <?php echo $item->orderitem_quantity;?>  
                     </td>
