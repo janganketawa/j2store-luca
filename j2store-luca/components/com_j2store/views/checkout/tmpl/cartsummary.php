@@ -49,12 +49,13 @@ $cart_edit_link = JRoute::_('index.php?option=com_j2store&view=mycart');
                     </td>
                     
                     <td style="width: 50px; text-align: center;">
-                        <?php echo J2StorePrices::number($item->orderitem_shipping); ?>  
+                        <?php echo $item->orderitem_quantity;?>  
                     </td>
                     
                     <td style="width: 50px; text-align: center;">
-                        <?php echo $item->orderitem_quantity;?>  
+                        <?php echo J2StorePrices::number($item->orderitem_shipping); ?>  
                     </td>
+                    
                     <td style="text-align: right;">
                         <?php echo J2StorePrices::number($item->orderitem_final_price); ?>
                                                
